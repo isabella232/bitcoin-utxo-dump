@@ -21,6 +21,7 @@ import "strings"      // parsing flags from command line
 import "runtime"      // Check OS type for file-handler limitations
 
 func main() {
+	fmt.Println("running utxo dump")
 
     // Version
     const Version = "1.0.1"
