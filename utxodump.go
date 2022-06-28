@@ -4,7 +4,7 @@ package main
 import "github.com/in3rsha/bitcoin-utxo-dump/bitcoin/btcleveldb" // chainstate leveldb decoding functions
 import "github.com/in3rsha/bitcoin-utxo-dump/bitcoin/keys"   // bitcoin addresses
 import "github.com/in3rsha/bitcoin-utxo-dump/bitcoin/bech32" // segwit bitcoin addresses
-import w "github.com/in3rsha/bitcoin-utxo-dump/writer" // segwit bitcoin addresses
+import "github.com/in3rsha/bitcoin-utxo-dump/writer" // segwit bitcoin addresses
 
 import "github.com/syndtr/goleveldb/leveldb" // go get github.com/syndtr/goleveldb/leveldb
 import "github.com/syndtr/goleveldb/leveldb/opt" // set no compression when opening leveldb
@@ -28,7 +28,7 @@ func main() {
     
     // Set default chainstate LevelDB and output file
     defaultfolder := fmt.Sprintf("%s/.bitcoin/chainstate/", os.Getenv("HOME")) // %s = string
-    defaultfile := "utxodump.csv"
+    defaultfile := "utxodump"
     
     // Command Line Options (Flags)
     chainstate := flag.String("db", defaultfolder, "Location of bitcoin chainstate db.") // chainstate folder
@@ -159,13 +159,13 @@ func main() {
     }
 
     // Create file buffer to speed up writing to the file.
-	var writer w.Writer
+	var fileWriter writer.Writer
 	if *parquetFlag {
-		writer = w.NewParquetWriter(*file)
+		fileWriter = writer.MustNewParquetWriter(*file)
 	} else {
-		writer = w.NewCsvWriter(*file, fieldsSelected)
+		fileWriter = writer.MustNewCsvWriter(*file, *fields)
 	}
-	defer writer.Close()
+	defer fileWriter.Close()
 
     if ! *quiet {
     	fmt.Printf("Processing %s and writing results to %s\n", *chainstate, *file)
@@ -194,8 +194,8 @@ func main() {
             fmt.Println("Interrupt signal caught. Shutting down gracefully.")
         }
         // iter.Release() // release database iterator
+        fileWriter.Close() // flush bufio to the file
         db.Close()     // close databse
-        writer.Close() // flush bufio to the file
         os.Exit(0)     // exit
     }()
 
@@ -346,7 +346,10 @@ func main() {
                 varint, bytesRead = btcleveldb.Varint128Read(xor, offset) // start after last varint
                 offset += bytesRead
                 nsize := btcleveldb.Varint128Decode(varint) //
-                output["nsize"] = fmt.Sprintf("%d", nsize)
+
+				if fieldsSelected["nsize"] {
+					output["nsize"] = fmt.Sprintf("%d", nsize)
+				}
 
                 // Script (remaining bytes)
                 // ------
@@ -532,7 +535,6 @@ func main() {
 
             } // if field from the Value is needed (e.g. -f txid,vout,address)
 
-
             // -------
             // Results
             // -------
@@ -559,7 +561,10 @@ func main() {
             // Write to File
             // -------------
             // Write to buffer (use bufio for faster writes)
-			writer.Write(output)
+			if err := fileWriter.Write(output); err != nil {
+				fmt.Printf("iteration [%v] failed to write utxo [%v], err %v", i, output, err)
+				break
+			}
 
             // Increment Count
             i++
