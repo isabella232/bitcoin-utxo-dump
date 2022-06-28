@@ -4,9 +4,11 @@ package main
 import "github.com/in3rsha/bitcoin-utxo-dump/bitcoin/btcleveldb" // chainstate leveldb decoding functions
 import "github.com/in3rsha/bitcoin-utxo-dump/bitcoin/keys"   // bitcoin addresses
 import "github.com/in3rsha/bitcoin-utxo-dump/bitcoin/bech32" // segwit bitcoin addresses
+import w "github.com/in3rsha/bitcoin-utxo-dump/writer" // segwit bitcoin addresses
 
 import "github.com/syndtr/goleveldb/leveldb" // go get github.com/syndtr/goleveldb/leveldb
 import "github.com/syndtr/goleveldb/leveldb/opt" // set no compression when opening leveldb
+
 import "flag"         // command line arguments
 import "fmt"
 import "os"           // open file for writing
@@ -37,6 +39,7 @@ func main() {
     p2pkaddresses := flag.Bool("p2pkaddresses", false, "Convert public keys in P2PK locking scripts to addresses also.") // true/false
     nowarnings := flag.Bool("nowarnings", false, "Ignore warnings if bitcoind is running in the background.") // true/false
     quiet := flag.Bool("quiet", false, "Do not display any progress or results.") // true/false
+	parquetFlag := flag.Bool("parquet", false, "Output to a parquet file instead of csv.")
     flag.Parse() // execute command line parsing for all declared flags
 
     // Check bitcoin isn't running first
@@ -116,7 +119,18 @@ func main() {
     fieldsAllowed := []string{"count", "txid", "vout", "height", "coinbase", "amount", "nsize", "script", "type", "address"}
 
     // Create a map of selected fields
-    fieldsSelected := map[string]bool{"count":false, "txid":false, "vout":false, "height":false, "coinbase":false, "amount":false, "nsize":false, "script":false, "type":false, "address":false}
+    fieldsSelected := map[string]bool{
+		"count":false,
+		"txid":false,
+		"vout":false,
+		"height":false,
+		"coinbase":false,
+		"amount":false,
+		"nsize":false,
+		"script":false,
+		"type":false,
+		"address":false,
+	}
 
     // Check that all the given fields are included in the fieldsAllowed array
     for _, v := range strings.Split(*fields, ",") {
@@ -143,31 +157,18 @@ func main() {
         }
     }
 
-    // Open file to write results to.
-    f, err := os.Create(*file) // os.OpenFile("filename.txt", os.O_APPEND, 0666)
-    if err != nil {
-        panic(err)
-    }
-    defer f.Close()
+    // Create file buffer to speed up writing to the file.
+	var writer w.Writer
+	if *parquetFlag {
+		writer = w.NewParquetWriter(*file)
+	} else {
+		writer = w.NewCsvWriter(*file, fieldsSelected)
+	}
+	defer writer.Close()
+
     if ! *quiet {
     	fmt.Printf("Processing %s and writing results to %s\n", *chainstate, *file)
     }
-
-    // Create file buffer to speed up writing to the file.
-    writer := bufio.NewWriter(f)
-    defer writer.Flush() // Flush the bufio buffer to the file before this script ends
-	
-    // CSV Headers
-    csvheader := ""
-    for _, v := range strings.Split(*fields, ",") {
-        csvheader += v
-        csvheader += ","
-    } // count,txid,vout,
-    csvheader = csvheader[:len(csvheader)-1] // remove trailing ,
-    if ! *quiet {
-        fmt.Println(csvheader)
-    }
-    fmt.Fprintln(writer, csvheader) // write to file
 
     // Stats - keep track of interesting stats as we read through leveldb.
     var totalAmount int64 = 0 // total amount of satoshis
@@ -193,8 +194,7 @@ func main() {
         }
         // iter.Release() // release database iterator
         db.Close()     // close databse
-        writer.Flush() // flush bufio to the file
-        f.Close()      // close file
+        writer.Close() // flush bufio to the file
         os.Exit(0)     // exit
     }()
 
@@ -538,19 +538,12 @@ func main() {
 
             // CSV Lines
             output["count"] = fmt.Sprintf("%d",i+1) // convert integer to string (e.g 1 to "1")
-            csvline := "" // Build output line from given fields
-            // [ ] string builder faster?
-            for _, v := range strings.Split(*fields, ",") {
-                csvline += output[v]
-                csvline += ","
-            }
-            csvline = csvline[:len(csvline)-1] // remove trailing ,
 
             // Print Results
             // -------------
             if ! *quiet {
 		        if *verbose { // -v flag
-		            fmt.Println(csvline) // Print each line.
+		            fmt.Println(output) // Print each line.
 		            // 1157.76user 176.47system 30:44.64elapsed 72%CPU (0avgtext+0avgdata 55332maxresident)k
 		            // 1110.76user 164.97system 29:17.17elapsed 72%CPU (0avgtext+0avgdata 55236maxresident)k (after using packages)
 		        } else {
@@ -565,7 +558,7 @@ func main() {
             // Write to File
             // -------------
             // Write to buffer (use bufio for faster writes)
-            fmt.Fprintln(writer, csvline)
+			writer.Write(output)
 
             // Increment Count
             i++
