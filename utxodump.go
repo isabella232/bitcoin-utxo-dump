@@ -4,7 +4,7 @@ package main
 import "github.com/in3rsha/bitcoin-utxo-dump/bitcoin/btcleveldb" // chainstate leveldb decoding functions
 import "github.com/in3rsha/bitcoin-utxo-dump/bitcoin/keys"   // bitcoin addresses
 import "github.com/in3rsha/bitcoin-utxo-dump/bitcoin/bech32" // segwit bitcoin addresses
-import "github.com/in3rsha/bitcoin-utxo-dump/writer" // segwit bitcoin addresses
+import "github.com/in3rsha/bitcoin-utxo-dump/writer"
 
 import "github.com/syndtr/goleveldb/leveldb" // go get github.com/syndtr/goleveldb/leveldb
 import "github.com/syndtr/goleveldb/leveldb/opt" // set no compression when opening leveldb
@@ -21,8 +21,6 @@ import "strings"      // parsing flags from command line
 import "runtime"      // Check OS type for file-handler limitations
 
 func main() {
-	fmt.Println("running utxo dump")
-
     // Version
     const Version = "1.0.1"
     
