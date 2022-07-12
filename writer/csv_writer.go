@@ -9,8 +9,8 @@ import (
 
 type Headers []string
 
-func (h *Headers) getHeaderLine() string {
-	return strings.Join(*h, ",")
+func (h Headers) getHeaderLine() string {
+	return strings.Join(h, ",")
 }
 
 type CSVWriter struct {
