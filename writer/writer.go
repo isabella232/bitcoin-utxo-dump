@@ -37,7 +37,7 @@ func mustCreateFileAndWriter(path, extension string) (*bufio.Writer, *os.File) {
 		panic(err)
 	}
 
-	file, err := os.Create(filePath) // os.OpenFile("filename.txt", os.O_APPEND, 0666)
+	file, err := os.Create(filePath)
 	if err != nil {
 		panic(err)
 	}
